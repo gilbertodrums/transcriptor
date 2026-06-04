@@ -2,4 +2,19 @@
 <resources>
     <string name="app_name">Transcriptor</string>
     <string name="hello">Hola</string>
+
+    <!-- Grabación -->
+    <string name="start_recording">Grabar</string>
+    <string name="stop_recording">Detener grabación</string>
+    <string name="recording_in_progress">Grabando…</string>
+    <string name="no_recordings">Sin grabaciones aún</string>
+    <string name="recordings_title">Grabaciones</string>
+
+    <!-- Reproducción -->
+    <string name="play">Reproducir</string>
+    <string name="stop_playback">Detener</string>
+
+    <!-- Permisos -->
+    <string name="permission_rationale">El micrófono es necesario para grabar. El audio nunca sale de tu teléfono.</string>
+    <string name="grant_permission">Conceder permiso</string>
 </resources>

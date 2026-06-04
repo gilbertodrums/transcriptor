@@ -18,15 +18,28 @@
 
 ## Fase 1 — Grabar y guardar audio
 
-- [ ] **1.1** Declarar `RECORD_AUDIO` en el manifiesto y crear el flujo de solicitud de permiso en
+- [x] **1.1** Declarar `RECORD_AUDIO` en el manifiesto y crear el flujo de solicitud de permiso en
       tiempo de ejecución (con manejo de "denegado").
-- [ ] **1.2** En `data/audio/`, crear un `AudioRecorder` que grabe PCM (16 kHz mono) a un archivo en
+- [x] **1.2** En `data/audio/`, crear un `AudioRecorder` que grabe PCM (16 kHz mono) a un archivo en
       almacenamiento privado. Exponerlo detrás de una interfaz simple.
-- [ ] **1.3** Modelo `Recording` en `domain/` (id, título, fecha, ruta del archivo).
-- [ ] **1.4** ViewModel + pantalla con botón Grabar/Detener que use el `AudioRecorder`.
-- [ ] **1.5** Lista de grabaciones (en memoria por ahora) que muestre las hechas en la sesión.
-- [ ] **1.6** Reproductor mínimo para confirmar que el audio guardado es válido.
-- [ ] **1.7** Pasos de prueba manual escritos y ejecutados en dispositivo físico.
+- [x] **1.3** Modelo `Recording` en `domain/` (id, título, fecha, ruta del archivo).
+- [x] **1.4** ViewModel + pantalla con botón Grabar/Detener que use el `AudioRecorder`.
+- [x] **1.5** Lista de grabaciones (en memoria por ahora) que muestre las hechas en la sesión.
+- [x] **1.6** Reproductor mínimo para confirmar que el audio guardado es válido.
+- [ ] **1.7** Pasos de prueba manual — ejecutar en dispositivo físico:
+      1. Instalar APK (`./gradlew installDebug` o Android Studio → Run).
+      2. Abrir la app. Verificar que aparece el botón "Grabar" o el banner de permiso.
+      3. Si aparece "Conceder permiso": pulsarlo y otorgar el permiso de micrófono.
+      4. Pulsar "Grabar". Verificar que el botón cambia a "Detener grabación" (rojo)
+         y aparece el texto "Grabando…".
+      5. Hablar 5–10 segundos cerca del micrófono.
+      6. Pulsar "Detener grabación". Verificar que aparece una entrada en la lista con la
+         fecha/hora.
+      7. Pulsar "Reproducir" en esa entrada. Verificar que se escucha el audio grabado.
+      8. Pulsar "Detener" para cortar la reproducción.
+      9. (Opcional) Repetir pasos 4–8 con una segunda grabación; confirmar que ambas
+         aparecen en la lista y se pueden reproducir independientemente.
+      ⚠️ Requiere dispositivo físico (el emulador no siempre tiene micrófono real).
 
 > Las tareas de la Fase 2 en adelante se detallarán cuando lleguemos a ellas, para no fijar
 > decisiones técnicas (qué motor de ASR, etc.) antes de tiempo. Mantener este archivo vivo.
@@ -40,3 +53,6 @@
 | 2026-06-04 | AGP 9.2.0 + Gradle 9.4.1 + Kotlin 2.3.20 + Compose BOM 2026.05.00, compileSdk/targetSdk 36, minSdk 26 | Versiones estables verificadas en docs oficiales a la fecha |
 | 2026-06-04 | Removido plugin `org.jetbrains.kotlin.android`; AGP 9.0+ tiene soporte Kotlin incorporado | Error explícito de AGP 9.x al intentar aplicar ambos |
 | 2026-06-04 | `org.gradle.java.home` apunta al JBR de Android Studio (JDK 21); sin `jvmToolchain` | JBR es Java 21; `jvmToolchain(17)` causaba fallo de toolchain lookup |
+| 2026-06-04 | AudioRecord PCM 16kHz mono → WavWriter con header placeholder 44 bytes | Whisper/Vosk esperan WAV; MediaPlayer lo reproduce directamente para verificación |
+| 2026-06-04 | `AudioRecorder` interfaz en `data/audio/`; `AudioRecorderImpl` con scope IO propio | Permite cambiar motor en Fase 2 sin tocar ViewModel ni UI |
+| 2026-06-04 | Sin `Icons.Default.PlayArrow`; se usan TextButton para evitar dependencia `material-icons-extended` | Reduce tamaño del APK; se puede agregar en Fase 5 (pulido) |
