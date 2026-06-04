@@ -28,4 +28,11 @@
     <!-- Transcripción -->
     <string name="transcribe">Transcribir</string>
     <string name="transcribing">Transcribiendo…</string>
+
+    <!-- Resumen -->
+    <string name="summarize">Resumir</string>
+    <string name="summarizing">Generando resumen…</string>
+    <string name="summary_title">Resumen</string>
+    <string name="summary_ai">Resumen IA</string>
+    <string name="summary_basic">Resumen básico</string>
 </resources>

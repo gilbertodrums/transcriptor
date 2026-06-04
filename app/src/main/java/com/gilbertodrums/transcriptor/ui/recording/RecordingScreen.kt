@@ -13,8 +13,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -59,37 +61,30 @@ fun RecordingScreen(vm: RecordingViewModel = viewModel()) {
     val playingId by vm.playingId.collectAsState()
     val modelState by vm.modelState.collectAsState()
     val transcribingId by vm.transcribingId.collectAsState()
+    val summarizingId by vm.summarizingId.collectAsState()
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
+        modifier = Modifier.fillMaxSize().padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(Modifier.height(24.dp))
 
-        // — Permiso de micrófono —
         if (!hasPermission) {
             PermissionSection(onRequest = { permissionLauncher.launch(Manifest.permission.RECORD_AUDIO) })
             Spacer(Modifier.height(16.dp))
         }
 
-        // — Estado del modelo ASR —
         ModelSection(state = modelState, onDownload = vm::downloadModel)
 
         Spacer(Modifier.height(24.dp))
 
-        // — Botón Grabar (solo si tiene permiso) —
         if (hasPermission) {
-            RecordButton(
-                isRecording = isRecording,
-                onToggle = { if (isRecording) vm.stopRecording() else vm.startRecording() }
-            )
+            RecordButton(isRecording = isRecording,
+                onToggle = { if (isRecording) vm.stopRecording() else vm.startRecording() })
         }
 
         Spacer(Modifier.height(24.dp))
 
-        // — Lista de grabaciones —
         if (recordings.isEmpty()) {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Text(
@@ -111,9 +106,11 @@ fun RecordingScreen(vm: RecordingViewModel = viewModel()) {
                         recording = recording,
                         isPlaying = playingId == recording.id,
                         isTranscribing = transcribingId == recording.id,
+                        isSummarizing = summarizingId == recording.id,
                         canTranscribe = modelState is ModelState.Ready,
                         onTogglePlay = { vm.togglePlayback(recording) },
-                        onTranscribe = { vm.transcribe(recording) }
+                        onTranscribe = { vm.transcribe(recording) },
+                        onSummarize = { vm.summarize(recording) }
                     )
                 }
             }
@@ -124,59 +121,37 @@ fun RecordingScreen(vm: RecordingViewModel = viewModel()) {
 @Composable
 private fun ModelSection(state: ModelState, onDownload: () -> Unit) {
     when (state) {
-        ModelState.Checking -> Unit
-        ModelState.NotDownloaded -> {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = stringResource(R.string.model_not_downloaded),
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Button(onClick = onDownload) {
-                        Text(stringResource(R.string.download_model))
-                    }
-                }
+        ModelState.Checking, ModelState.Ready -> Unit
+        ModelState.NotDownloaded -> Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+        ) {
+            Column(Modifier.padding(16.dp)) {
+                Text(stringResource(R.string.model_not_downloaded), style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(8.dp))
+                Button(onClick = onDownload) { Text(stringResource(R.string.download_model)) }
             }
         }
-        is ModelState.Downloading -> {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = stringResource(R.string.model_downloading, state.progress),
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    LinearProgressIndicator(
-                        progress = { state.progress / 100f },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
+        is ModelState.Downloading -> Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+        ) {
+            Column(Modifier.padding(16.dp)) {
+                Text(stringResource(R.string.model_downloading, state.progress), style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(8.dp))
+                LinearProgressIndicator(progress = { state.progress / 100f }, modifier = Modifier.fillMaxWidth())
             }
         }
-        ModelState.Ready -> Unit
-        is ModelState.Error -> {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = stringResource(R.string.model_error, state.message),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onErrorContainer
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedButton(onClick = onDownload) {
-                        Text(stringResource(R.string.retry))
-                    }
-                }
+        is ModelState.Error -> Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+        ) {
+            Column(Modifier.padding(16.dp)) {
+                Text(stringResource(R.string.model_error, state.message),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onErrorContainer)
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(onClick = onDownload) { Text(stringResource(R.string.retry)) }
             }
         }
     }
@@ -185,36 +160,27 @@ private fun ModelSection(state: ModelState, onDownload: () -> Unit) {
 @Composable
 private fun PermissionSection(onRequest: () -> Unit) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            text = stringResource(R.string.permission_rationale),
+        Text(stringResource(R.string.permission_rationale),
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(12.dp))
-        Button(onClick = onRequest) {
-            Text(stringResource(R.string.grant_permission))
-        }
+        Button(onClick = onRequest) { Text(stringResource(R.string.grant_permission)) }
     }
 }
 
 @Composable
 private fun RecordButton(isRecording: Boolean, onToggle: () -> Unit) {
-    Button(
-        onClick = onToggle,
+    Button(onClick = onToggle,
         colors = ButtonDefaults.buttonColors(
             containerColor = if (isRecording) MaterialTheme.colorScheme.error
-            else MaterialTheme.colorScheme.primary
-        )
-    ) {
+            else MaterialTheme.colorScheme.primary)) {
         Text(stringResource(if (isRecording) R.string.stop_recording else R.string.start_recording))
     }
     if (isRecording) {
         Spacer(Modifier.height(6.dp))
-        Text(
-            text = stringResource(R.string.recording_in_progress),
+        Text(stringResource(R.string.recording_in_progress),
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error
-        )
+            color = MaterialTheme.colorScheme.error)
     }
 }
 
@@ -223,56 +189,70 @@ private fun RecordingItem(
     recording: Recording,
     isPlaying: Boolean,
     isTranscribing: Boolean,
+    isSummarizing: Boolean,
     canTranscribe: Boolean,
     onTogglePlay: () -> Unit,
-    onTranscribe: () -> Unit
+    onTranscribe: () -> Unit,
+    onSummarize: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = recording.title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.weight(1f)
-                )
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+
+            // Título + Reproducir
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(recording.title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
                 TextButton(onClick = onTogglePlay) {
                     Text(stringResource(if (isPlaying) R.string.stop_playback else R.string.play))
                 }
             }
 
-            // — Transcripción —
+            // Transcripción
             when {
-                isTranscribing -> {
-                    Spacer(Modifier.height(8.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(modifier = Modifier.padding(end = 8.dp))
-                        Text(
-                            text = stringResource(R.string.transcribing),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
+                isTranscribing -> InlineProgress(stringResource(R.string.transcribing))
                 recording.transcript != null -> {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = recording.transcript,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
-                canTranscribe -> {
-                    TextButton(onClick = onTranscribe) {
-                        Text(stringResource(R.string.transcribe))
+                    Spacer(Modifier.height(6.dp))
+                    Text(recording.transcript, style = MaterialTheme.typography.bodyMedium)
+
+                    // Resumen
+                    Spacer(Modifier.height(4.dp))
+                    when {
+                        isSummarizing -> InlineProgress(stringResource(R.string.summarizing))
+                        recording.summary != null -> SummarySection(recording.summary.points, recording.summary.isAi)
+                        else -> TextButton(onClick = onSummarize) { Text(stringResource(R.string.summarize)) }
                     }
                 }
+                canTranscribe -> TextButton(onClick = onTranscribe) { Text(stringResource(R.string.transcribe)) }
             }
         }
+    }
+}
+
+@Composable
+private fun InlineProgress(label: String) {
+    Spacer(Modifier.height(6.dp))
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+        Spacer(Modifier.size(8.dp))
+        Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun SummarySection(points: List<String>, isAi: Boolean) {
+    Spacer(Modifier.height(8.dp))
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(stringResource(R.string.summary_title), style = MaterialTheme.typography.labelMedium)
+        Spacer(Modifier.size(6.dp))
+        Badge(containerColor = if (isAi) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary) {
+            Text(stringResource(if (isAi) R.string.summary_ai else R.string.summary_basic))
+        }
+    }
+    Spacer(Modifier.height(4.dp))
+    points.forEach { point ->
+        Text("• $point", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 2.dp))
     }
 }

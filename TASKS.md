@@ -51,7 +51,7 @@
 - [x] **2.5** Actualizar `Recording` con campo `transcript: String?`; `RecordingViewModel` con
       estado del modelo y lógica de transcripción.
 - [x] **2.6** UI: estado de descarga del modelo, botón "Transcribir" por grabación, texto resultante.
-- [ ] **2.7** Test manual en dispositivo físico en modo avión (prueba clave de localidad):
+- [x] **2.7** Test manual en dispositivo físico en modo avión (prueba clave de localidad):
       1. Activar modo avión.
       2. Abrir app. Verificar que aparece "Descargar modelo" (si modelo no descargado aún).
          O si ya está descargado, continuar desde el paso 4.
@@ -61,7 +61,27 @@
       6. Verificar que aparece texto transcrito debajo de la grabación, **sin conexión**.
       ⚠️ Si el modelo ya estaba descargado, el modo avión completo funciona desde el paso 4.
 
-> Las tareas de la Fase 3 en adelante se detallarán cuando lleguemos a ellas.
+## Fase 3 — Resumen local
+
+- [x] **3.1** Definir interfaz `Summarizer` + clase `Summary` en `data/llm/`.
+- [x] **3.2** `ExtractiveSummarizer` (Plan B): extracción heurística de frases clave,
+      funciona en cualquier idioma y dispositivo sin modelos pesados. Marcado como "Resumen básico".
+- [x] **3.3** ML Kit Summarization API descartada: la API real de `genai-summarization:1.0.0-beta1`
+      no coincide con la documentación pública disponible (no se pudo verificar — regla AGENTS.md).
+      Además, solo soporta inglés; para español el Plan B es siempre el correcto.
+      La interfaz `Summarizer` está diseñada para enchufar un LLM real en Fase 5 cuando
+      esté verificada la API (MediaPipe LLM / ML Kit estable).
+- [x] **3.4** `Recording` actualizado con campo `summary: Summary?`.
+      `RecordingViewModel`: método `summarize()`, estado `_summarizingId`.
+- [x] **3.5** UI: botón "Resumir" (aparece tras transcripción), spinner mientras resume,
+      lista de puntos + badge "Resumen IA" / "Resumen básico".
+- [ ] **3.6** Test manual en dispositivo:
+      1. Grabar y transcribir una clase de 2–5 minutos.
+      2. Pulsar "Resumir". Esperar 2–10 s.
+      3. Verificar que aparecen 3–5 puntos clave en español (Resumen básico).
+      4. (Opcional) Verificar que la app no falla en modo avión.
+
+> Las tareas de la Fase 4 en adelante se detallarán cuando lleguemos a ellas.
 
 ---
 

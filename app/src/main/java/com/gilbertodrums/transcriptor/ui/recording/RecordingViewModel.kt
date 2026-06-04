@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.gilbertodrums.transcriptor.data.asr.VoskModelManager
 import com.gilbertodrums.transcriptor.data.asr.VoskSpeechRecognizer
 import com.gilbertodrums.transcriptor.data.audio.AudioRecorderImpl
+import com.gilbertodrums.transcriptor.data.llm.ExtractiveSummarizer
 import com.gilbertodrums.transcriptor.domain.model.Recording
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -30,6 +31,7 @@ class RecordingViewModel(application: Application) : AndroidViewModel(applicatio
     private val audioRecorder = AudioRecorderImpl()
     private val modelManager = VoskModelManager(application)
     private var speechRecognizer: VoskSpeechRecognizer? = null
+    private val summarizer = ExtractiveSummarizer()
     private var mediaPlayer: MediaPlayer? = null
     private var currentFile: File? = null
 
@@ -50,9 +52,13 @@ class RecordingViewModel(application: Application) : AndroidViewModel(applicatio
     private val _transcribingId = MutableStateFlow<String?>(null)
     val transcribingId: StateFlow<String?> = _transcribingId.asStateFlow()
 
+    // — Resumen —
+    private val _summarizingId = MutableStateFlow<String?>(null)
+    val summarizingId: StateFlow<String?> = _summarizingId.asStateFlow()
+
     init { checkModel() }
 
-    // — Modelo —
+    // — Modelo ASR —
 
     private fun checkModel() {
         viewModelScope.launch {
@@ -87,11 +93,23 @@ class RecordingViewModel(application: Application) : AndroidViewModel(applicatio
             _transcribingId.value = recording.id
             runCatching {
                 val text = recognizer.transcribe(File(recording.filePath))
-                _recordings.value = _recordings.value.map { r ->
-                    if (r.id == recording.id) r.copy(transcript = text) else r
-                }
+                updateRecording(recording.id) { it.copy(transcript = text) }
             }
             _transcribingId.value = null
+        }
+    }
+
+    // — Resumen —
+
+    fun summarize(recording: Recording) {
+        val text = recording.transcript ?: return
+        viewModelScope.launch {
+            _summarizingId.value = recording.id
+            runCatching {
+                val summary = summarizer.summarize(text)
+                updateRecording(recording.id) { it.copy(summary = summary) }
+            }
+            _summarizingId.value = null
         }
     }
 
@@ -147,6 +165,10 @@ class RecordingViewModel(application: Application) : AndroidViewModel(applicatio
         mediaPlayer?.release()
         mediaPlayer = null
         _playingId.value = null
+    }
+
+    private fun updateRecording(id: String, transform: (Recording) -> Recording) {
+        _recordings.value = _recordings.value.map { if (it.id == id) transform(it) else it }
     }
 
     override fun onCleared() {
