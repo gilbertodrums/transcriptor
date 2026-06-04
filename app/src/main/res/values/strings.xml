@@ -35,4 +35,9 @@
     <string name="summary_title">Resumen</string>
     <string name="summary_ai">Resumen IA</string>
     <string name="summary_basic">Resumen básico</string>
+
+    <!-- Modelo LLM (Gemma) -->
+    <string name="llm_not_found">Para resúmenes con IA, copia el modelo Gemma al dispositivo.</string>
+    <string name="llm_loading">Cargando modelo IA…</string>
+    <string name="llm_error">Error al cargar el modelo IA: %1$s</string>
 </resources>

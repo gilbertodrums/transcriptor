@@ -8,6 +8,7 @@ import com.gilbertodrums.transcriptor.data.asr.VoskModelManager
 import com.gilbertodrums.transcriptor.data.asr.VoskSpeechRecognizer
 import com.gilbertodrums.transcriptor.data.audio.AudioRecorderImpl
 import com.gilbertodrums.transcriptor.data.llm.ExtractiveSummarizer
+import com.gilbertodrums.transcriptor.data.llm.MediaPipeSummarizer
 import com.gilbertodrums.transcriptor.domain.model.Recording
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,16 +27,30 @@ sealed interface ModelState {
     data class Error(val message: String) : ModelState
 }
 
+sealed interface LlmState {
+    data object Checking : LlmState
+    data object ModelNotFound : LlmState
+    data object Loading : LlmState
+    data object Ready : LlmState
+    data class Error(val message: String) : LlmState
+}
+
 class RecordingViewModel(application: Application) : AndroidViewModel(application) {
 
+    // — ASR (Vosk) —
     private val audioRecorder = AudioRecorderImpl()
     private val modelManager = VoskModelManager(application)
     private var speechRecognizer: VoskSpeechRecognizer? = null
-    private val summarizer = ExtractiveSummarizer()
+
+    // — Sumario —
+    private val mediaPipeSummarizer = MediaPipeSummarizer(application)
+    private val extractiveSummarizer = ExtractiveSummarizer()
+
+    // — Audio —
     private var mediaPlayer: MediaPlayer? = null
     private var currentFile: File? = null
 
-    // — Grabación —
+    // — Estados —
     private val _isRecording = MutableStateFlow(false)
     val isRecording: StateFlow<Boolean> = _isRecording.asStateFlow()
 
@@ -45,22 +60,26 @@ class RecordingViewModel(application: Application) : AndroidViewModel(applicatio
     private val _playingId = MutableStateFlow<String?>(null)
     val playingId: StateFlow<String?> = _playingId.asStateFlow()
 
-    // — Modelo ASR —
     private val _modelState = MutableStateFlow<ModelState>(ModelState.Checking)
     val modelState: StateFlow<ModelState> = _modelState.asStateFlow()
+
+    private val _llmState = MutableStateFlow<LlmState>(LlmState.Checking)
+    val llmState: StateFlow<LlmState> = _llmState.asStateFlow()
 
     private val _transcribingId = MutableStateFlow<String?>(null)
     val transcribingId: StateFlow<String?> = _transcribingId.asStateFlow()
 
-    // — Resumen —
     private val _summarizingId = MutableStateFlow<String?>(null)
     val summarizingId: StateFlow<String?> = _summarizingId.asStateFlow()
 
-    init { checkModel() }
+    init {
+        checkVoskModel()
+        checkLlmModel()
+    }
 
-    // — Modelo ASR —
+    // — Vosk —
 
-    private fun checkModel() {
+    private fun checkVoskModel() {
         viewModelScope.launch {
             _modelState.value = if (modelManager.isAvailable()) {
                 speechRecognizer = VoskSpeechRecognizer(modelManager.modelDir)
@@ -85,6 +104,20 @@ class RecordingViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    // — Gemma / MediaPipe —
+
+    private fun checkLlmModel() {
+        viewModelScope.launch {
+            if (!mediaPipeSummarizer.isModelAvailable()) {
+                _llmState.value = LlmState.ModelNotFound
+                return@launch
+            }
+            _llmState.value = LlmState.Loading
+            val ok = mediaPipeSummarizer.loadModel()
+            _llmState.value = if (ok) LlmState.Ready else LlmState.Error("No se pudo cargar el modelo")
+        }
+    }
+
     // — Transcripción —
 
     fun transcribe(recording: Recording) {
@@ -106,7 +139,11 @@ class RecordingViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             _summarizingId.value = recording.id
             runCatching {
-                val summary = summarizer.summarize(text)
+                val summary = if (_llmState.value == LlmState.Ready) {
+                    mediaPipeSummarizer.summarize(text)
+                } else {
+                    extractiveSummarizer.summarize(text)
+                }
                 updateRecording(recording.id) { it.copy(summary = summary) }
             }
             _summarizingId.value = null
@@ -116,10 +153,7 @@ class RecordingViewModel(application: Application) : AndroidViewModel(applicatio
     // — Grabación —
 
     fun startRecording() {
-        val file = File(
-            getApplication<Application>().filesDir,
-            "rec_${System.currentTimeMillis()}.wav"
-        )
+        val file = File(getApplication<Application>().filesDir, "rec_${System.currentTimeMillis()}.wav")
         currentFile = file
         audioRecorder.startRecording(file)
         _isRecording.value = true
@@ -176,5 +210,6 @@ class RecordingViewModel(application: Application) : AndroidViewModel(applicatio
         if (_isRecording.value) audioRecorder.stopRecording()
         stopPlayback()
         speechRecognizer?.release()
+        mediaPipeSummarizer.release()
     }
 }

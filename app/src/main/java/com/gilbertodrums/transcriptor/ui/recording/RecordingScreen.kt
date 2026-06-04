@@ -60,6 +60,7 @@ fun RecordingScreen(vm: RecordingViewModel = viewModel()) {
     val recordings by vm.recordings.collectAsState()
     val playingId by vm.playingId.collectAsState()
     val modelState by vm.modelState.collectAsState()
+    val llmState by vm.llmState.collectAsState()
     val transcribingId by vm.transcribingId.collectAsState()
     val summarizingId by vm.summarizingId.collectAsState()
 
@@ -75,6 +76,7 @@ fun RecordingScreen(vm: RecordingViewModel = viewModel()) {
         }
 
         ModelSection(state = modelState, onDownload = vm::downloadModel)
+        LlmModelSection(state = llmState)
 
         Spacer(Modifier.height(24.dp))
 
@@ -153,6 +155,45 @@ private fun ModelSection(state: ModelState, onDownload: () -> Unit) {
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(onClick = onDownload) { Text(stringResource(R.string.retry)) }
             }
+        }
+    }
+}
+
+@Composable
+private fun LlmModelSection(state: LlmState) {
+    when (state) {
+        LlmState.Checking, LlmState.Ready -> Unit
+        LlmState.ModelNotFound -> {
+            Spacer(Modifier.height(8.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
+            ) {
+                Text(
+                    text = stringResource(R.string.llm_not_found),
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(12.dp)
+                )
+            }
+        }
+        LlmState.Loading -> {
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                Spacer(Modifier.size(8.dp))
+                Text(stringResource(R.string.llm_loading), style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        is LlmState.Error -> {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = stringResource(R.string.llm_error, state.message),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error
+            )
         }
     }
 }

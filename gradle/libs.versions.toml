@@ -6,6 +6,7 @@ coreKtx = "1.18.0"
 lifecycle = "2.10.0"
 activityCompose = "1.13.0"
 vosk = "0.3.47"
+mediapipeGenai = "0.10.27"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -19,6 +20,7 @@ compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
 compose-material3 = { group = "androidx.compose.material3", name = "material3" }
 vosk-android = { group = "com.alphacephei", name = "vosk-android", version.ref = "vosk" }
+mediapipe-tasks-genai = { group = "com.google.mediapipe", name = "tasks-genai", version.ref = "mediapipeGenai" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

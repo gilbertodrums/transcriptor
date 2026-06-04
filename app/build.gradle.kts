@@ -47,4 +47,5 @@ dependencies {
     implementation(libs.compose.material3)
     debugImplementation(libs.compose.ui.tooling)
     implementation(libs.vosk.android)
+    implementation(libs.mediapipe.tasks.genai)
 }
