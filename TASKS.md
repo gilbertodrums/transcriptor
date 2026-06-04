@@ -26,7 +26,7 @@
 - [x] **1.4** ViewModel + pantalla con botón Grabar/Detener que use el `AudioRecorder`.
 - [x] **1.5** Lista de grabaciones (en memoria por ahora) que muestre las hechas en la sesión.
 - [x] **1.6** Reproductor mínimo para confirmar que el audio guardado es válido.
-- [ ] **1.7** Pasos de prueba manual — ejecutar en dispositivo físico:
+- [x] **1.7** Pasos de prueba manual — ejecutar en dispositivo físico:
       1. Instalar APK (`./gradlew installDebug` o Android Studio → Run).
       2. Abrir la app. Verificar que aparece el botón "Grabar" o el banner de permiso.
       3. Si aparece "Conceder permiso": pulsarlo y otorgar el permiso de micrófono.
@@ -41,8 +41,27 @@
          aparecen en la lista y se pueden reproducir independientemente.
       ⚠️ Requiere dispositivo físico (el emulador no siempre tiene micrófono real).
 
-> Las tareas de la Fase 2 en adelante se detallarán cuando lleguemos a ellas, para no fijar
-> decisiones técnicas (qué motor de ASR, etc.) antes de tiempo. Mantener este archivo vivo.
+## Fase 2 — Transcripción local
+
+- [x] **2.1** Definir interfaz `SpeechRecognizer` en `data/asr/`.
+- [x] **2.2** Agregar Vosk 0.3.47 + repositorio alphacephei. Añadir `INTERNET` (excepción documentada:
+      descarga única del modelo desde alphacephei.com, sin datos de usuario). Modelo: vosk-model-small-es-0.42, 39 MB, Apache 2.0.
+- [x] **2.3** `VoskModelManager`: descarga + descompresión del modelo con progreso.
+- [x] **2.4** `VoskSpeechRecognizer`: implementación de la interfaz; procesa WAV → texto.
+- [x] **2.5** Actualizar `Recording` con campo `transcript: String?`; `RecordingViewModel` con
+      estado del modelo y lógica de transcripción.
+- [x] **2.6** UI: estado de descarga del modelo, botón "Transcribir" por grabación, texto resultante.
+- [ ] **2.7** Test manual en dispositivo físico en modo avión (prueba clave de localidad):
+      1. Activar modo avión.
+      2. Abrir app. Verificar que aparece "Descargar modelo" (si modelo no descargado aún).
+         O si ya está descargado, continuar desde el paso 4.
+      3. (Primera vez con WiFi) Descargar el modelo → esperar barra de progreso → "Listo".
+      4. Activar modo avión. Hacer una grabación de 10–20 s.
+      5. Pulsar "Transcribir" → esperar (puede tardar 10–30 s según la duración).
+      6. Verificar que aparece texto transcrito debajo de la grabación, **sin conexión**.
+      ⚠️ Si el modelo ya estaba descargado, el modo avión completo funciona desde el paso 4.
+
+> Las tareas de la Fase 3 en adelante se detallarán cuando lleguemos a ellas.
 
 ---
 

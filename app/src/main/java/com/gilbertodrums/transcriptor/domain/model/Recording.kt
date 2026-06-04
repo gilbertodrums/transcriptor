@@ -6,5 +6,6 @@ data class Recording(
     val id: String,
     val title: String,
     val createdAt: LocalDateTime,
-    val filePath: String
+    val filePath: String,
+    val transcript: String? = null
 )

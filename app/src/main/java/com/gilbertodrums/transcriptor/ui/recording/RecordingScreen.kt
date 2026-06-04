@@ -19,6 +19,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -55,6 +57,8 @@ fun RecordingScreen(vm: RecordingViewModel = viewModel()) {
     val isRecording by vm.isRecording.collectAsState()
     val recordings by vm.recordings.collectAsState()
     val playingId by vm.playingId.collectAsState()
+    val modelState by vm.modelState.collectAsState()
+    val transcribingId by vm.transcribingId.collectAsState()
 
     Column(
         modifier = Modifier
@@ -62,21 +66,32 @@ fun RecordingScreen(vm: RecordingViewModel = viewModel()) {
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(Modifier.height(32.dp))
+        Spacer(Modifier.height(24.dp))
 
+        // — Permiso de micrófono —
         if (!hasPermission) {
             PermissionSection(onRequest = { permissionLauncher.launch(Manifest.permission.RECORD_AUDIO) })
-        } else {
+            Spacer(Modifier.height(16.dp))
+        }
+
+        // — Estado del modelo ASR —
+        ModelSection(state = modelState, onDownload = vm::downloadModel)
+
+        Spacer(Modifier.height(24.dp))
+
+        // — Botón Grabar (solo si tiene permiso) —
+        if (hasPermission) {
             RecordButton(
                 isRecording = isRecording,
                 onToggle = { if (isRecording) vm.stopRecording() else vm.startRecording() }
             )
         }
 
-        Spacer(Modifier.height(32.dp))
+        Spacer(Modifier.height(24.dp))
 
+        // — Lista de grabaciones —
         if (recordings.isEmpty()) {
-            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Text(
                     text = stringResource(R.string.no_recordings),
                     style = MaterialTheme.typography.bodyMedium,
@@ -95,8 +110,72 @@ fun RecordingScreen(vm: RecordingViewModel = viewModel()) {
                     RecordingItem(
                         recording = recording,
                         isPlaying = playingId == recording.id,
-                        onTogglePlay = { vm.togglePlayback(recording) }
+                        isTranscribing = transcribingId == recording.id,
+                        canTranscribe = modelState is ModelState.Ready,
+                        onTogglePlay = { vm.togglePlayback(recording) },
+                        onTranscribe = { vm.transcribe(recording) }
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ModelSection(state: ModelState, onDownload: () -> Unit) {
+    when (state) {
+        ModelState.Checking -> Unit
+        ModelState.NotDownloaded -> {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = stringResource(R.string.model_not_downloaded),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Button(onClick = onDownload) {
+                        Text(stringResource(R.string.download_model))
+                    }
+                }
+            }
+        }
+        is ModelState.Downloading -> {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = stringResource(R.string.model_downloading, state.progress),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    LinearProgressIndicator(
+                        progress = { state.progress / 100f },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        }
+        ModelState.Ready -> Unit
+        is ModelState.Error -> {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = stringResource(R.string.model_error, state.message),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(onClick = onDownload) {
+                        Text(stringResource(R.string.retry))
+                    }
                 }
             }
         }
@@ -120,7 +199,6 @@ private fun PermissionSection(onRequest: () -> Unit) {
 
 @Composable
 private fun RecordButton(isRecording: Boolean, onToggle: () -> Unit) {
-    val label = stringResource(if (isRecording) R.string.stop_recording else R.string.start_recording)
     Button(
         onClick = onToggle,
         colors = ButtonDefaults.buttonColors(
@@ -128,10 +206,10 @@ private fun RecordButton(isRecording: Boolean, onToggle: () -> Unit) {
             else MaterialTheme.colorScheme.primary
         )
     ) {
-        Text(label)
+        Text(stringResource(if (isRecording) R.string.stop_recording else R.string.start_recording))
     }
     if (isRecording) {
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(6.dp))
         Text(
             text = stringResource(R.string.recording_in_progress),
             style = MaterialTheme.typography.bodySmall,
@@ -144,26 +222,56 @@ private fun RecordButton(isRecording: Boolean, onToggle: () -> Unit) {
 private fun RecordingItem(
     recording: Recording,
     isPlaying: Boolean,
-    onTogglePlay: () -> Unit
+    isTranscribing: Boolean,
+    canTranscribe: Boolean,
+    onTogglePlay: () -> Unit,
+    onTranscribe: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = recording.title,
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.weight(1f)
-            )
-            TextButton(onClick = onTogglePlay) {
-                Text(stringResource(if (isPlaying) R.string.stop_playback else R.string.play))
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = recording.title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(onClick = onTogglePlay) {
+                    Text(stringResource(if (isPlaying) R.string.stop_playback else R.string.play))
+                }
+            }
+
+            // — Transcripción —
+            when {
+                isTranscribing -> {
+                    Spacer(Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(modifier = Modifier.padding(end = 8.dp))
+                        Text(
+                            text = stringResource(R.string.transcribing),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                recording.transcript != null -> {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = recording.transcript,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+                canTranscribe -> {
+                    TextButton(onClick = onTranscribe) {
+                        Text(stringResource(R.string.transcribe))
+                    }
+                }
             }
         }
     }

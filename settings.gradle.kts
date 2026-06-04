@@ -16,6 +16,8 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // Vosk offline ASR — descarga de modelos de IA local (sin datos de usuario)
+        maven { url = uri("https://alphacephei.com/maven/") }
     }
 }
 rootProject.name = "Transcriptor"

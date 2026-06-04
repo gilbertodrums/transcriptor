@@ -3,6 +3,9 @@
 
     <!-- Micrófono: requerido para grabar audio localmente. Sin subida a servidores. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Internet: SOLO para descarga única del modelo de IA (vosk-model-small-es, 39 MB).
+         No se envían datos del usuario ni audio a ningún servidor. -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:allowBackup="true"

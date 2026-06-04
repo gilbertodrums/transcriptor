@@ -17,4 +17,15 @@
     <!-- Permisos -->
     <string name="permission_rationale">El micrófono es necesario para grabar. El audio nunca sale de tu teléfono.</string>
     <string name="grant_permission">Conceder permiso</string>
+
+    <!-- Modelo ASR -->
+    <string name="model_not_downloaded">El modelo de transcripción no está descargado (39 MB). Solo se descarga una vez.</string>
+    <string name="download_model">Descargar modelo</string>
+    <string name="model_downloading">Descargando modelo… %1$d%%</string>
+    <string name="model_error">Error al descargar: %1$s</string>
+    <string name="retry">Reintentar</string>
+
+    <!-- Transcripción -->
+    <string name="transcribe">Transcribir</string>
+    <string name="transcribing">Transcribiendo…</string>
 </resources>

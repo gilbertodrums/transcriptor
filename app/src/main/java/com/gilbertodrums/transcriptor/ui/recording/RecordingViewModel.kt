@@ -4,6 +4,8 @@ import android.app.Application
 import android.media.MediaPlayer
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.gilbertodrums.transcriptor.data.asr.VoskModelManager
+import com.gilbertodrums.transcriptor.data.asr.VoskSpeechRecognizer
 import com.gilbertodrums.transcriptor.data.audio.AudioRecorderImpl
 import com.gilbertodrums.transcriptor.domain.model.Recording
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,11 +17,23 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.UUID
 
+sealed interface ModelState {
+    data object Checking : ModelState
+    data object NotDownloaded : ModelState
+    data class Downloading(val progress: Int) : ModelState
+    data object Ready : ModelState
+    data class Error(val message: String) : ModelState
+}
+
 class RecordingViewModel(application: Application) : AndroidViewModel(application) {
 
     private val audioRecorder = AudioRecorderImpl()
+    private val modelManager = VoskModelManager(application)
+    private var speechRecognizer: VoskSpeechRecognizer? = null
     private var mediaPlayer: MediaPlayer? = null
+    private var currentFile: File? = null
 
+    // — Grabación —
     private val _isRecording = MutableStateFlow(false)
     val isRecording: StateFlow<Boolean> = _isRecording.asStateFlow()
 
@@ -29,7 +43,59 @@ class RecordingViewModel(application: Application) : AndroidViewModel(applicatio
     private val _playingId = MutableStateFlow<String?>(null)
     val playingId: StateFlow<String?> = _playingId.asStateFlow()
 
-    private var currentFile: File? = null
+    // — Modelo ASR —
+    private val _modelState = MutableStateFlow<ModelState>(ModelState.Checking)
+    val modelState: StateFlow<ModelState> = _modelState.asStateFlow()
+
+    private val _transcribingId = MutableStateFlow<String?>(null)
+    val transcribingId: StateFlow<String?> = _transcribingId.asStateFlow()
+
+    init { checkModel() }
+
+    // — Modelo —
+
+    private fun checkModel() {
+        viewModelScope.launch {
+            _modelState.value = if (modelManager.isAvailable()) {
+                speechRecognizer = VoskSpeechRecognizer(modelManager.modelDir)
+                ModelState.Ready
+            } else {
+                ModelState.NotDownloaded
+            }
+        }
+    }
+
+    fun downloadModel() {
+        viewModelScope.launch {
+            runCatching {
+                modelManager.downloadAndExtract { progress ->
+                    _modelState.value = ModelState.Downloading(progress)
+                }
+                speechRecognizer = VoskSpeechRecognizer(modelManager.modelDir)
+                _modelState.value = ModelState.Ready
+            }.onFailure { e ->
+                _modelState.value = ModelState.Error(e.message ?: "Error desconocido")
+            }
+        }
+    }
+
+    // — Transcripción —
+
+    fun transcribe(recording: Recording) {
+        val recognizer = speechRecognizer ?: return
+        viewModelScope.launch {
+            _transcribingId.value = recording.id
+            runCatching {
+                val text = recognizer.transcribe(File(recording.filePath))
+                _recordings.value = _recordings.value.map { r ->
+                    if (r.id == recording.id) r.copy(transcript = text) else r
+                }
+            }
+            _transcribingId.value = null
+        }
+    }
+
+    // — Grabación —
 
     fun startRecording() {
         val file = File(
@@ -44,19 +110,18 @@ class RecordingViewModel(application: Application) : AndroidViewModel(applicatio
     fun stopRecording() {
         audioRecorder.stopRecording()
         _isRecording.value = false
-
         val file = currentFile ?: return
         currentFile = null
-
         val formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")
-        val recording = Recording(
+        _recordings.value = _recordings.value + Recording(
             id = UUID.randomUUID().toString(),
             title = LocalDateTime.now().format(formatter),
             createdAt = LocalDateTime.now(),
             filePath = file.absolutePath
         )
-        _recordings.value = _recordings.value + recording
     }
+
+    // — Reproducción —
 
     fun togglePlayback(recording: Recording) {
         viewModelScope.launch {
@@ -88,5 +153,6 @@ class RecordingViewModel(application: Application) : AndroidViewModel(applicatio
         super.onCleared()
         if (_isRecording.value) audioRecorder.stopRecording()
         stopPlayback()
+        speechRecognizer?.release()
     }
 }
