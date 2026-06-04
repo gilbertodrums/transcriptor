@@ -67,19 +67,31 @@
 - [x] **3.2** `ExtractiveSummarizer` (Plan B): extracción heurística de frases clave,
       funciona en cualquier idioma y dispositivo sin modelos pesados. Marcado como "Resumen básico".
 - [x] **3.3** ML Kit Summarization API descartada: la API real de `genai-summarization:1.0.0-beta1`
-      no coincide con la documentación pública disponible (no se pudo verificar — regla AGENTS.md).
-      Además, solo soporta inglés; para español el Plan B es siempre el correcto.
-      La interfaz `Summarizer` está diseñada para enchufar un LLM real en Fase 5 cuando
-      esté verificada la API (MediaPipe LLM / ML Kit estable).
+      no coincide con la documentación pública (no se pudo verificar — regla AGENTS.md) y solo
+      soporta inglés. Se optó por **MediaPipe LLM Inference + Gemma 3 1B** (ver 3.6).
 - [x] **3.4** `Recording` actualizado con campo `summary: Summary?`.
       `RecordingViewModel`: método `summarize()`, estado `_summarizingId`.
 - [x] **3.5** UI: botón "Resumir" (aparece tras transcripción), spinner mientras resume,
       lista de puntos + badge "Resumen IA" / "Resumen básico".
-- [ ] **3.6** Test manual en dispositivo:
-      1. Grabar y transcribir una clase de 2–5 minutos.
-      2. Pulsar "Resumir". Esperar 2–10 s.
-      3. Verificar que aparecen 3–5 puntos clave en español (Resumen básico).
-      4. (Opcional) Verificar que la app no falla en modo avión.
+- [x] **3.6** **LLM real en dispositivo:** `MediaPipeSummarizer` con `tasks-genai:0.10.27`
+      corriendo **Gemma 3 1B int4** (.task, ~530 MB). Prompt en español, parseo de viñetas.
+      Degradación automática al `ExtractiveSummarizer` si el modelo no está cargado.
+- [x] **3.7** `ExtractiveSummarizer` reescrito: la versión por oraciones devolvía la
+      transcripción completa (Vosk no produce puntuación). Ahora divide por bloques de
+      40 palabras y puntúa por densidad de palabras clave (stopwords en español).
+- [x] **3.8** **Descarga del modelo con un solo botón, sin token:** `MediaPipeModelManager`
+      descarga Gemma desde un mirror público no-gated (descarga directa, sin licencia ni
+      token para el usuario). El usuario nunca sale de la app. Validación de integridad por tamaño.
+- [ ] **3.9** Test manual en dispositivo:
+      1. Conectar WiFi. Pulsar "Descargar IA" → esperar barra de progreso (~530 MB).
+      2. Esperar "Preparando IA…" (carga en RAM, ~15–30 s).
+      3. Grabar y transcribir una clase de 2–5 minutos.
+      4. Pulsar "Resumir". Verificar que aparecen 3–5 puntos clave **redactados por la IA**
+         (no fragmentos literales), con el badge "Resumen IA".
+      5. Verificar que el resumen funciona en **modo avión** (modelo ya en disco).
+
+> Pendiente de robustez (Fase 5): el mirror del modelo lo mantiene un tercero y podría
+> desaparecer. Para producción, hospedar copia propia (p. ej. GitHub Release del repo).
 
 > Las tareas de la Fase 4 en adelante se detallarán cuando lleguemos a ellas.
 
@@ -95,3 +107,7 @@
 | 2026-06-04 | AudioRecord PCM 16kHz mono → WavWriter con header placeholder 44 bytes | Whisper/Vosk esperan WAV; MediaPlayer lo reproduce directamente para verificación |
 | 2026-06-04 | `AudioRecorder` interfaz en `data/audio/`; `AudioRecorderImpl` con scope IO propio | Permite cambiar motor en Fase 2 sin tocar ViewModel ni UI |
 | 2026-06-04 | Sin `Icons.Default.PlayArrow`; se usan TextButton para evitar dependencia `material-icons-extended` | Reduce tamaño del APK; se puede agregar en Fase 5 (pulido) |
+| 2026-06-04 | ASR: Vosk 0.3.47 + modelo `vosk-model-small-es-0.42` (39 MB, Apache 2.0) | Offline, liviano, fácil de integrar, español nativo. Whisper queda para Fase 5 si se quiere más calidad |
+| 2026-06-05 | Resumen IA: MediaPipe `tasks-genai:0.10.27` + Gemma 3 1B int4 (~530 MB) | LLM real en dispositivo; el extractivo (Plan B) solo devolvía fragmentos literales |
+| 2026-06-05 | `ExtractiveSummarizer` por bloques de 40 palabras, no por oraciones | Vosk no produce puntuación; la regex `[.!?]` nunca cortaba y devolvía todo el texto |
+| 2026-06-05 | Modelo Gemma desde mirror público no-gated (typosbro), no el repo oficial gated | Elimina token/licencia para el usuario: un solo botón "Descargar IA". Riesgo: depende de tercero (ver Fase 5) |

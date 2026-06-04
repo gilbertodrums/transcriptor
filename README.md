@@ -35,11 +35,21 @@ con Google Play y es nuestra principal promesa de valor.
 
 ## Estado actual
 
-- [ ] Fase 0 — Esqueleto del proyecto (la app vacía compila y abre)
-- [ ] Fase 1 — Grabar audio y guardarlo
-- [ ] Fase 2 — Transcripción local → mostrar texto
-- [ ] Fase 3 — Resumen local del texto
+- [x] Fase 0 — Esqueleto del proyecto (la app vacía compila y abre)
+- [x] Fase 1 — Grabar audio y guardarlo
+- [x] Fase 2 — Transcripción local → mostrar texto (Vosk, español, offline)
+- [x] Fase 3 — Resumen local del texto (Gemma 3 1B en dispositivo + Plan B extractivo)
 - [ ] Fase 4 — Biblioteca de grabaciones (persistencia)
 - [ ] Fase 5 — Pulido y servicios extra
 
 > El agente actualiza estas casillas al cerrar cada fase.
+
+### Stack implementado hasta ahora
+
+- **UI:** Jetpack Compose + Material 3, patrón MVVM.
+- **Grabación:** `AudioRecord` → WAV PCM 16 kHz mono, almacenamiento privado.
+- **Transcripción:** Vosk 0.3.47, modelo `vosk-model-small-es-0.42` (39 MB), 100% offline.
+- **Resumen:** MediaPipe LLM Inference + Gemma 3 1B int4 (~530 MB, en dispositivo), con
+  degradación automática a resumen extractivo si el modelo no está disponible.
+- **Modelos:** se descargan una sola vez dentro de la app (sin token ni configuración externa);
+  ningún dato del usuario sale del teléfono.
