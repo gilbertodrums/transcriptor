@@ -37,7 +37,12 @@
     <string name="summary_basic">Resumen básico</string>
 
     <!-- Modelo LLM (Gemma) -->
-    <string name="llm_not_found">Para resúmenes con IA, copia el modelo Gemma al dispositivo.</string>
-    <string name="llm_loading">Cargando modelo IA…</string>
-    <string name="llm_error">Error al cargar el modelo IA: %1$s</string>
+    <string name="llm_token_instructions">Para activar resúmenes con IA:\n1. Ve a huggingface.co/settings/tokens\n2. Crea un token (Read)\n3. Acepta la licencia en huggingface.co/google/gemma-3-1b-it\n4. Pega el token aquí y descarga el modelo (529 MB, solo una vez)</string>
+    <string name="llm_token_label">Token de HuggingFace</string>
+    <string name="llm_token_save">Guardar token</string>
+    <string name="llm_token_saved">Token guardado. El modelo se descargará en tu teléfono (~529 MB).</string>
+    <string name="llm_download">Descargar modelo IA</string>
+    <string name="llm_downloading">Descargando modelo IA… %1$d%%</string>
+    <string name="llm_loading">Cargando modelo IA en memoria…</string>
+    <string name="llm_error">Error: %1$s</string>
 </resources>

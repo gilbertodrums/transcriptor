@@ -76,7 +76,11 @@ fun RecordingScreen(vm: RecordingViewModel = viewModel()) {
         }
 
         ModelSection(state = modelState, onDownload = vm::downloadModel)
-        LlmModelSection(state = llmState)
+        LlmModelSection(
+            state = llmState,
+            onSaveToken = vm::saveToken,
+            onDownload = vm::downloadLlmModel
+        )
 
         Spacer(Modifier.height(24.dp))
 
@@ -160,40 +164,102 @@ private fun ModelSection(state: ModelState, onDownload: () -> Unit) {
 }
 
 @Composable
-private fun LlmModelSection(state: LlmState) {
+private fun LlmModelSection(state: LlmState, onSaveToken: (String) -> Unit, onDownload: () -> Unit) {
     when (state) {
         LlmState.Checking, LlmState.Ready -> Unit
-        LlmState.ModelNotFound -> {
+
+        LlmState.NeedToken -> {
+            Spacer(Modifier.height(8.dp))
+            LlmTokenCard(onSaveToken = onSaveToken)
+        }
+
+        LlmState.TokenSaved -> {
             Spacer(Modifier.height(8.dp))
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
             ) {
-                Text(
-                    text = stringResource(R.string.llm_not_found),
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(12.dp)
-                )
+                Column(Modifier.padding(12.dp)) {
+                    Text(stringResource(R.string.llm_token_saved), style = MaterialTheme.typography.bodySmall)
+                    Spacer(Modifier.height(8.dp))
+                    Button(onClick = onDownload) { Text(stringResource(R.string.llm_download)) }
+                }
             }
         }
+
+        is LlmState.Downloading -> {
+            Spacer(Modifier.height(8.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
+            ) {
+                Column(Modifier.padding(12.dp)) {
+                    Text(
+                        stringResource(R.string.llm_downloading, state.progress),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    LinearProgressIndicator(
+                        progress = { state.progress / 100f },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        }
+
         LlmState.Loading -> {
             Spacer(Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Row(Modifier.padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                 Spacer(Modifier.size(8.dp))
                 Text(stringResource(R.string.llm_loading), style = MaterialTheme.typography.bodySmall)
             }
         }
+
         is LlmState.Error -> {
             Spacer(Modifier.height(8.dp))
-            Text(
-                text = stringResource(R.string.llm_error, state.message),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+            ) {
+                Column(Modifier.padding(12.dp)) {
+                    Text(
+                        stringResource(R.string.llm_error, state.message),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    OutlinedButton(onClick = onDownload) { Text(stringResource(R.string.retry)) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LlmTokenCard(onSaveToken: (String) -> Unit) {
+    var token by remember { mutableStateOf("") }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            Text(stringResource(R.string.llm_token_instructions), style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.height(8.dp))
+            androidx.compose.material3.OutlinedTextField(
+                value = token,
+                onValueChange = { token = it },
+                label = { Text(stringResource(R.string.llm_token_label)) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
             )
+            Spacer(Modifier.height(8.dp))
+            Button(
+                onClick = { if (token.isNotBlank()) onSaveToken(token) },
+                enabled = token.isNotBlank()
+            ) {
+                Text(stringResource(R.string.llm_token_save))
+            }
         }
     }
 }

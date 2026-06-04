@@ -29,8 +29,10 @@ sealed interface ModelState {
 
 sealed interface LlmState {
     data object Checking : LlmState
-    data object ModelNotFound : LlmState
-    data object Loading : LlmState
+    data object NeedToken : LlmState                    // sin token guardado
+    data object TokenSaved : LlmState                   // token guardado, listo para descargar
+    data class Downloading(val progress: Int) : LlmState
+    data object Loading : LlmState                      // modelo en disco, cargando en RAM
     data object Ready : LlmState
     data class Error(val message: String) : LlmState
 }
@@ -108,13 +110,37 @@ class RecordingViewModel(application: Application) : AndroidViewModel(applicatio
 
     private fun checkLlmModel() {
         viewModelScope.launch {
-            if (!mediaPipeSummarizer.isModelAvailable()) {
-                _llmState.value = LlmState.ModelNotFound
-                return@launch
+            when {
+                mediaPipeSummarizer.isModelAvailable() -> loadLlm()
+                mediaPipeSummarizer.manager.savedToken() != null -> _llmState.value = LlmState.TokenSaved
+                else -> _llmState.value = LlmState.NeedToken
             }
-            _llmState.value = LlmState.Loading
-            val ok = mediaPipeSummarizer.loadModel()
-            _llmState.value = if (ok) LlmState.Ready else LlmState.Error("No se pudo cargar el modelo")
+        }
+    }
+
+    private suspend fun loadLlm() {
+        _llmState.value = LlmState.Loading
+        val ok = mediaPipeSummarizer.loadModel()
+        _llmState.value = if (ok) LlmState.Ready
+        else LlmState.Error("No se pudo cargar el modelo")
+    }
+
+    fun saveToken(token: String) {
+        mediaPipeSummarizer.manager.saveToken(token)
+        _llmState.value = LlmState.TokenSaved
+    }
+
+    fun downloadLlmModel() {
+        val token = mediaPipeSummarizer.manager.savedToken() ?: return
+        viewModelScope.launch {
+            runCatching {
+                mediaPipeSummarizer.manager.download(token) { progress ->
+                    _llmState.value = LlmState.Downloading(progress)
+                }
+                loadLlm()
+            }.onFailure { e ->
+                _llmState.value = LlmState.Error(e.message ?: "Error desconocido")
+            }
         }
     }
 

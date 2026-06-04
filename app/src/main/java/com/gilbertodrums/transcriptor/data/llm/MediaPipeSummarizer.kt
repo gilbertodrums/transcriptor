@@ -25,19 +25,16 @@ class MediaPipeSummarizer(
 
     private var llm: LlmInference? = null
 
-    fun modelFile(): File? {
-        val f = File(context.getExternalFilesDir(null), MODEL_FILENAME)
-        return if (f.exists()) f else null
-    }
+    val manager = MediaPipeModelManager(context)
 
-    fun isModelAvailable(): Boolean = modelFile() != null
+    fun isModelAvailable(): Boolean = manager.isModelAvailable()
 
     /** Carga el modelo en memoria (operación lenta, ~10-30 s). */
     suspend fun loadModel(): Boolean = withContext(Dispatchers.IO) {
-        val file = modelFile() ?: return@withContext false
+        if (!manager.isModelAvailable()) return@withContext false
         runCatching {
             val options = LlmInference.LlmInferenceOptions.builder()
-                .setModelPath(file.absolutePath)
+                .setModelPath(manager.modelFile.absolutePath)
                 .setMaxTokens(MAX_OUTPUT_TOKENS)
                 .build()
             llm = LlmInference.createFromOptions(context, options)
