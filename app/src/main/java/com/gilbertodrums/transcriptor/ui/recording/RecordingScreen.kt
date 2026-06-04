@@ -78,7 +78,6 @@ fun RecordingScreen(vm: RecordingViewModel = viewModel()) {
         ModelSection(state = modelState, onDownload = vm::downloadModel)
         LlmModelSection(
             state = llmState,
-            onSaveToken = vm::saveToken,
             onDownload = vm::downloadLlmModel
         )
 
@@ -164,23 +163,18 @@ private fun ModelSection(state: ModelState, onDownload: () -> Unit) {
 }
 
 @Composable
-private fun LlmModelSection(state: LlmState, onSaveToken: (String) -> Unit, onDownload: () -> Unit) {
+private fun LlmModelSection(state: LlmState, onDownload: () -> Unit) {
     when (state) {
         LlmState.Checking, LlmState.Ready -> Unit
 
-        LlmState.NeedToken -> {
-            Spacer(Modifier.height(8.dp))
-            LlmTokenCard(onSaveToken = onSaveToken)
-        }
-
-        LlmState.TokenSaved -> {
+        LlmState.NotDownloaded -> {
             Spacer(Modifier.height(8.dp))
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
             ) {
                 Column(Modifier.padding(12.dp)) {
-                    Text(stringResource(R.string.llm_token_saved), style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.llm_intro), style = MaterialTheme.typography.bodySmall)
                     Spacer(Modifier.height(8.dp))
                     Button(onClick = onDownload) { Text(stringResource(R.string.llm_download)) }
                 }
@@ -231,34 +225,6 @@ private fun LlmModelSection(state: LlmState, onSaveToken: (String) -> Unit, onDo
                     Spacer(Modifier.height(6.dp))
                     OutlinedButton(onClick = onDownload) { Text(stringResource(R.string.retry)) }
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun LlmTokenCard(onSaveToken: (String) -> Unit) {
-    var token by remember { mutableStateOf("") }
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
-    ) {
-        Column(Modifier.padding(12.dp)) {
-            Text(stringResource(R.string.llm_token_instructions), style = MaterialTheme.typography.bodySmall)
-            Spacer(Modifier.height(8.dp))
-            androidx.compose.material3.OutlinedTextField(
-                value = token,
-                onValueChange = { token = it },
-                label = { Text(stringResource(R.string.llm_token_label)) },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
-            Spacer(Modifier.height(8.dp))
-            Button(
-                onClick = { if (token.isNotBlank()) onSaveToken(token) },
-                enabled = token.isNotBlank()
-            ) {
-                Text(stringResource(R.string.llm_token_save))
             }
         }
     }
