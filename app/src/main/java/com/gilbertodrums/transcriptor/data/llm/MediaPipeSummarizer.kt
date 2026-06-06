@@ -1,10 +1,16 @@
 package com.gilbertodrums.transcriptor.data.llm
 
 import android.content.Context
+import android.os.Process
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import java.io.File
+import java.util.concurrent.Executors
 
 /**
  * Resumidor basado en Gemma 3 1B (4-bit cuantizado, ~529 MB).
@@ -19,13 +25,30 @@ class MediaPipeSummarizer(
 
     companion object {
         const val MODEL_FILENAME = "gemma3-1b-it-int4.task"
-        private const val MAX_INPUT_CHARS = 3_000
-        private const val MAX_OUTPUT_TOKENS = 512
+
+        // setMaxTokens es el presupuesto TOTAL (entrada + salida). Debe caber el prompt
+        // completo MÁS la respuesta; si la entrada lo desborda, la generación se vuelve
+        // lentísima/inestable (causa del ANR con textos largos).
+        private const val MAX_TOTAL_TOKENS = 1_280
+        // Truncamos la entrada para dejar SIEMPRE margen de salida dentro del presupuesto.
+        // ~2000 caracteres ≈ 520 tokens; +plantilla deja ~700 tokens para la respuesta.
+        private const val MAX_INPUT_CHARS = 2_000
+        // Si la IA tarda más que esto, cancelamos y caemos al resumen básico (la UI no se cuelga).
+        private const val GENERATION_TIMEOUT_MS = 45_000L
     }
 
     private var llm: LlmInference? = null
 
     val manager = MediaPipeModelManager(context)
+
+    // Hilo único y de baja prioridad para la inferencia: serializa las generaciones
+    // (evita que se acumulen y disparen un OOM) y cede CPU al hilo de la interfaz.
+    private val inferenceDispatcher = Executors.newSingleThreadExecutor { runnable ->
+        Thread({
+            Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
+            runnable.run()
+        }, "gemma-inference")
+    }.asCoroutineDispatcher()
 
     fun isModelAvailable(): Boolean = manager.isModelAvailable()
 
@@ -35,7 +58,7 @@ class MediaPipeSummarizer(
         runCatching {
             val options = LlmInference.LlmInferenceOptions.builder()
                 .setModelPath(manager.modelFile.absolutePath)
-                .setMaxTokens(MAX_OUTPUT_TOKENS)
+                .setMaxTokens(MAX_TOTAL_TOKENS)
                 .build()
             llm = LlmInference.createFromOptions(context, options)
             true
@@ -44,12 +67,20 @@ class MediaPipeSummarizer(
 
     override suspend fun summarize(text: String): Summary {
         val inference = llm ?: return fallback.summarize(text)
-        return runCatching { generateSummary(inference, text) }
-            .getOrElse { fallback.summarize(text) }
+        return try {
+            withTimeout(GENERATION_TIMEOUT_MS) { generateSummary(inference, text) }
+        } catch (e: TimeoutCancellationException) {
+            // La IA tardó demasiado: devolvemos el resumen básico en vez de colgar la app.
+            fallback.summarize(text)
+        } catch (e: CancellationException) {
+            throw e // cancelación real (p. ej. ViewModel destruido): propagar
+        } catch (e: Exception) {
+            fallback.summarize(text)
+        }
     }
 
     private suspend fun generateSummary(inference: LlmInference, text: String): Summary =
-        withContext(Dispatchers.Default) {
+        withContext(inferenceDispatcher) {
             val truncated = text.take(MAX_INPUT_CHARS)
             val prompt = buildPrompt(truncated)
             val response = inference.generateResponse(prompt)
@@ -89,5 +120,6 @@ class MediaPipeSummarizer(
     fun release() {
         llm?.close()
         llm = null
+        inferenceDispatcher.close()
     }
 }

@@ -1,18 +1,29 @@
 package com.gilbertodrums.transcriptor.data.asr
 
-import kotlinx.coroutines.Dispatchers
+import android.os.Process
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import org.vosk.Model
 import org.vosk.Recognizer
 import java.io.File
+import java.util.concurrent.Executors
 
 class VoskSpeechRecognizer(private val modelDir: File) : SpeechRecognizer {
 
     // El modelo es costoso de cargar; se reutiliza entre transcripciones.
     private var model: Model? = null
 
-    override suspend fun transcribe(audioFile: File): String = withContext(Dispatchers.IO) {
+    // Hilo único y de baja prioridad: la transcripción corre aquí, cediendo CPU a la UI
+    // (evita el "no responde" con audios largos).
+    private val transcribeDispatcher = Executors.newSingleThreadExecutor { runnable ->
+        Thread({
+            Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
+            runnable.run()
+        }, "vosk-transcribe")
+    }.asCoroutineDispatcher()
+
+    override suspend fun transcribe(audioFile: File): String = withContext(transcribeDispatcher) {
         val m = model ?: Model(modelDir.absolutePath).also { model = it }
 
         Recognizer(m, 16_000f).use { rec ->
@@ -32,5 +43,6 @@ class VoskSpeechRecognizer(private val modelDir: File) : SpeechRecognizer {
     override fun release() {
         model?.close()
         model = null
+        transcribeDispatcher.close()
     }
 }
