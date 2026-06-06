@@ -90,10 +90,82 @@
          (no fragmentos literales), con el badge "Resumen IA".
       5. Verificar que el resumen funciona en **modo avión** (modelo ya en disco).
 
-> Pendiente de robustez (Fase 5): el mirror del modelo lo mantiene un tercero y podría
-> desaparecer. Para producción, hospedar copia propia (p. ej. GitHub Release del repo).
+## Fase 4 — Biblioteca y persistencia (Room)
 
-> Las tareas de la Fase 4 en adelante se detallarán cuando lleguemos a ellas.
+> Meta: que grabaciones, transcripciones y resúmenes sobrevivan al cerrar la app.
+> Hoy todo vive en memoria (`_recordings` en `RecordingViewModel`) y se pierde al cerrar.
+
+- [x] **4.1** Agregar dependencias Room (`room-runtime`, `room-ktx`) + compilador vía **KSP**
+      (no kapt). Confirmar versiones estables vigentes antes de fijarlas (regla AGENTS.md).
+      **Hecho (2026-06-06).** Room 2.8.4 + KSP 2.3.9 (verificado: su POM depende de Kotlin
+      2.3.20, el del proyecto). `assembleDebug` pasa.
+- [ ] **4.2** `RecordingEntity` en `data/db/` que mapee el modelo de dominio `Recording`.
+      `TypeConverter` para `LocalDateTime` (guardar como epoch millis o ISO String) y para
+      `Summary` (serializar a JSON — incluir los puntos y el flag IA/básico).
+- [ ] **4.3** `RecordingDao`: `insert`, `update`, `delete`, `getAllFlow(): Flow<List<RecordingEntity>>`
+      (ordenado por fecha desc) y `getById`.
+- [ ] **4.4** `AppDatabase : RoomDatabase` (singleton, versión 1) + funciones de mapeo
+      `Entity ↔ Recording` para que la capa `domain/` no conozca Room.
+- [ ] **4.5** `RecordingRepository` en `data/` que exponga `Recording` de dominio sobre el DAO.
+      Es la única puerta a la persistencia; oculta Room al ViewModel.
+- [ ] **4.6** Cablear `RecordingViewModel`: cargar desde el repositorio en `init` (colectar el
+      `Flow`), y persistir en `stopRecording()`, `transcribe()` y `summarize()` en vez de mutar
+      la lista en memoria. `updateRecording` pasa a escribir en BD.
+- [ ] **4.7** Borrar grabación: `delete` en DAO **+ borrar el archivo de audio** del
+      almacenamiento privado. Botón en la UI con confirmación.
+- [ ] **4.8** Estrategia de migración: arrancar en versión 1. `fallbackToDestructiveMigration`
+      es aceptable **solo** mientras la app no esté publicada; documentarlo en la bitácora.
+- [ ] **4.9** Test manual en dispositivo:
+      1. Grabar, transcribir y resumir una grabación.
+      2. Cerrar la app por completo (deslizar desde "recientes"), no solo minimizar.
+      3. Reabrir → verificar que la grabación, su transcripción y su resumen **siguen ahí**.
+      4. Reproducir el audio para confirmar que la ruta del archivo sigue válida.
+      5. Borrar una grabación → confirmar que desaparece de la lista **y** que su archivo
+         `.wav` ya no existe en el almacenamiento privado.
+
+**Criterios de aceptación (de ROADMAP.md):** Room guarda metadatos, transcripción y resumen;
+la lista persiste entre reinicios; abrir una grabación muestra audio+transcripción+resumen;
+se puede borrar (incluido su archivo).
+
+---
+
+## Fase 4.5 — Robustez de descarga de modelos (hardening) ⚠️ recomendado antes de publicar
+
+> Problema: hoy el modelo Gemma se baja de **un solo mirror de un tercero** (typosbro en
+> HuggingFace) y se valida **solo por tamaño**. Si ese mirror cae, la IA queda inservible para
+> usuarios nuevos. Vosk (alphacephei.com) es más estable pero comparte la fragilidad.
+> **Decisión (2026-06-06): origen primario = GitHub Release del propio repo; HF/alphacephei como fallback.**
+
+- [x] **4.5.1** Subir el `.task` de Gemma (~554 MB) a un **GitHub Release** del repo y calcular
+      su **SHA-256**. Hacer lo mismo (registrar SHA-256) para el `.zip` de Vosk.
+      **Hecho (2026-06-06).** Release `models-v1` en `gilbertodrums/transcriptor` (repo público,
+      descarga sin token, `Accept-Ranges: bytes` → reanudable). Datos para 4.5.2/4.5.4:
+      - Gemma: `https://github.com/gilbertodrums/transcriptor/releases/download/models-v1/gemma3-1b-it-int4.task`
+        · 554661246 bytes · SHA-256 `ddfaf1210d8b4d1b812b5fadb6652999e852c8be6dd9abe353b9213a25262c10`
+        · fallback: `https://huggingface.co/typosbro/Gemma3-1B-IT/resolve/main/Gemma3-1B-IT_multi-prefill-seq_q4_ekv2048.task`
+      - Vosk: `https://github.com/gilbertodrums/transcriptor/releases/download/models-v1/vosk-model-small-es-0.42.zip`
+        · 39817833 bytes · SHA-256 `09b239888f633ef2f0b4e09736e3d9936acfd810bc65d53fad45261762c6511f`
+        · fallback: `https://alphacephei.com/vosk/models/vosk-model-small-es-0.42.zip`
+- [ ] **4.5.2** Modelo `ModelSource(urls: List<String>, sha256: String, sizeBytes: Long)` en
+      `data/`: lista ordenada de orígenes (primario = GitHub Release; fallbacks = mirrors HF /
+      alphacephei) + hash y tamaño esperados.
+- [ ] **4.5.3** `ResilientDownloader` reutilizable en `data/`: recorre la lista de URLs probando
+      la siguiente si una falla; **descarga reanudable** con cabecera HTTP `Range` (continúa
+      desde el `.tmp` parcial); **verifica SHA-256** al terminar; `renameTo` atómico solo si el
+      hash coincide. Si el hash no coincide, descarta y prueba el siguiente origen.
+- [ ] **4.5.4** Migrar `MediaPipeModelManager` y `VoskModelManager` a `ResilientDownloader` con
+      sus respectivos `ModelSource`. Sustituir la validación por tamaño por la de hash.
+- [ ] **4.5.5** UX de error: distinguir "sin conexión" de "todos los orígenes fallaron";
+      botón "Reintentar"; al reabrir, ofrecer reanudar una descarga incompleta.
+- [ ] **4.5.6** *(opcional, máxima robustez)* **Manifiesto remoto**: un JSON pequeño en GitHub
+      raw (`models.json`) con las URLs + hash + tamaño actuales. La app lo lee primero, así se
+      puede **cambiar el origen sin publicar una actualización**. Si el manifiesto no carga, usar
+      la lista embebida como respaldo.
+- [ ] **4.5.7** Test manual: (a) poner una URL primaria inválida a propósito → confirmar que cae
+      al fallback; (b) cortar la red a mitad de descarga y reanudar → confirmar que continúa;
+      (c) forzar un hash esperado incorrecto → confirmar que rechaza el archivo.
+
+> Las tareas de la Fase 5 (pulido y publicación) se detallarán al llegar.
 
 ---
 
@@ -111,3 +183,9 @@
 | 2026-06-05 | Resumen IA: MediaPipe `tasks-genai:0.10.27` + Gemma 3 1B int4 (~530 MB) | LLM real en dispositivo; el extractivo (Plan B) solo devolvía fragmentos literales |
 | 2026-06-05 | `ExtractiveSummarizer` por bloques de 40 palabras, no por oraciones | Vosk no produce puntuación; la regex `[.!?]` nunca cortaba y devolvía todo el texto |
 | 2026-06-05 | Modelo Gemma desde mirror público no-gated (typosbro), no el repo oficial gated | Elimina token/licencia para el usuario: un solo botón "Descargar IA". Riesgo: depende de tercero (ver Fase 5) |
+| 2026-06-06 | Fase 4 = Room en `data/db/` detrás de un `RecordingRepository`; ViewModel deja de usar lista en memoria | Único punto de acceso a BD; el dominio no conoce Room (igual patrón que ASR/LLM) |
+| 2026-06-06 | Persistencia con Room vía **KSP** (no kapt) | KSP es el procesador recomendado/soportado para Room en Kotlin actual; kapt está en mantenimiento |
+| 2026-06-06 | Robustez descarga: origen primario = **GitHub Release del repo**; HF/alphacephei como fallback | El repo es propio: no desaparece. CDN estable, hasta 2 GB, sin token. Mirrors de terceros pasan a respaldo |
+| 2026-06-06 | Validar modelo por **SHA-256** (no por tamaño) + descarga reanudable + cadena de mirrors | El tamaño no detecta corrupción ni archivo cambiado; Range evita reiniciar 554 MB; fallback elimina el punto único de fallo |
+| 2026-06-06 | Modelos alojados en GitHub Release `models-v1` (Gemma + Vosk); descarga sin token, `Accept-Ranges: bytes` | Origen primario propio; URLs y SHA-256 registrados en tarea 4.5.1 para cablear en 4.5.4 |
+| 2026-06-06 | Room 2.8.4 + KSP 2.3.9 | Versiones estables verificadas en Maven; KSP 2.3.9 (esquema KSP2 independiente) construido contra Kotlin 2.3.20 del proyecto |

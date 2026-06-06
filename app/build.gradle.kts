@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -48,4 +49,7 @@ dependencies {
     debugImplementation(libs.compose.ui.tooling)
     implementation(libs.vosk.android)
     implementation(libs.mediapipe.tasks.genai)
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
 }
