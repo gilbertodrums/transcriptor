@@ -99,29 +99,49 @@
       (no kapt). Confirmar versiones estables vigentes antes de fijarlas (regla AGENTS.md).
       **Hecho (2026-06-06).** Room 2.8.4 + KSP 2.3.9 (verificado: su POM depende de Kotlin
       2.3.20, el del proyecto). `assembleDebug` pasa.
-- [ ] **4.2** `RecordingEntity` en `data/db/` que mapee el modelo de dominio `Recording`.
+- [x] **4.2** `RecordingEntity` en `data/db/` que mapee el modelo de dominio `Recording`.
       `TypeConverter` para `LocalDateTime` (guardar como epoch millis o ISO String) y para
       `Summary` (serializar a JSON — incluir los puntos y el flag IA/básico).
-- [ ] **4.3** `RecordingDao`: `insert`, `update`, `delete`, `getAllFlow(): Flow<List<RecordingEntity>>`
+      **Hecho (2026-06-06).** `RecordingEntity` (tabla `recordings`, PK `id`) 1:1 con `Recording`.
+      `Converters`: `LocalDateTime` ⇄ epoch millis (zona sistema, para ordenar en SQL) y
+      `Summary` ⇄ JSON con `org.json` (sin dependencias nuevas). Compila con KSP.
+- [x] **4.3** `RecordingDao`: `insert`, `update`, `delete`, `getAllFlow(): Flow<List<RecordingEntity>>`
       (ordenado por fecha desc) y `getById`.
-- [ ] **4.4** `AppDatabase : RoomDatabase` (singleton, versión 1) + funciones de mapeo
+      **Hecho (2026-06-06).** Escrituras `suspend`; `insert` con `OnConflictStrategy.REPLACE`
+      (sirve para guardar cambios); `getAllFlow` ordena `createdAt DESC`. Compila con KSP.
+- [x] **4.4** `AppDatabase : RoomDatabase` (singleton, versión 1) + funciones de mapeo
       `Entity ↔ Recording` para que la capa `domain/` no conozca Room.
-- [ ] **4.5** `RecordingRepository` en `data/` que exponga `Recording` de dominio sobre el DAO.
+      **Hecho (2026-06-06).** `AppDatabase` (BD `transcriptor.db`, v1, `@TypeConverters`,
+      singleton con doble verificación). Mapeo `toDomain()`/`toEntity()`. Room valida todo:
+      `assembleDebug` pasa sin advertencias.
+- [x] **4.5** `RecordingRepository` en `data/` que exponga `Recording` de dominio sobre el DAO.
       Es la única puerta a la persistencia; oculta Room al ViewModel.
-- [ ] **4.6** Cablear `RecordingViewModel`: cargar desde el repositorio en `init` (colectar el
+      **Hecho (2026-06-06).** `recordings: Flow<List<Recording>>` (mapea entidad→dominio),
+      `getById`, `save` (insert REPLACE = crear/actualizar) y `delete`. Compila.
+- [x] **4.6** Cablear `RecordingViewModel`: cargar desde el repositorio en `init` (colectar el
       `Flow`), y persistir en `stopRecording()`, `transcribe()` y `summarize()` en vez de mutar
       la lista en memoria. `updateRecording` pasa a escribir en BD.
-- [ ] **4.7** Borrar grabación: `delete` en DAO **+ borrar el archivo de audio** del
+      **Hecho (2026-06-06).** `recordings` ahora es `repository.recordings.stateIn(...)`
+      (la BD es la fuente de verdad; la UI se actualiza sola). `stopRecording` y `updateRecording`
+      (ahora `suspend`) escriben vía `repository.save`. Eliminada la lista en memoria. Compila.
+- [x] **4.7** Borrar grabación: `delete` en DAO **+ borrar el archivo de audio** del
       almacenamiento privado. Botón en la UI con confirmación.
-- [ ] **4.8** Estrategia de migración: arrancar en versión 1. `fallbackToDestructiveMigration`
+      **Hecho (2026-06-06).** `deleteRecording()` detiene la reproducción si aplica, borra el
+      `.wav` y la fila. Botón "Borrar" (rojo) en cada item + `AlertDialog` de confirmación.
+      Strings nuevos. `assembleDebug` pasa.
+- [x] **4.8** Estrategia de migración: arrancar en versión 1. `fallbackToDestructiveMigration`
       es aceptable **solo** mientras la app no esté publicada; documentarlo en la bitácora.
-- [ ] **4.9** Test manual en dispositivo:
+      **Hecho (2026-06-06).** BD en v1 con `fallbackToDestructiveMigration(dropAllTables = true)`
+      y `exportSchema = false`. Documentado en bitácora y en el comentario de `AppDatabase`.
+- [x] **4.9** Test manual en dispositivo:
       1. Grabar, transcribir y resumir una grabación.
       2. Cerrar la app por completo (deslizar desde "recientes"), no solo minimizar.
       3. Reabrir → verificar que la grabación, su transcripción y su resumen **siguen ahí**.
       4. Reproducir el audio para confirmar que la ruta del archivo sigue válida.
       5. Borrar una grabación → confirmar que desaparece de la lista **y** que su archivo
          `.wav` ya no existe en el almacenamiento privado.
+      **Hecho (2026-06-06).** Probado en Motorola Edge 50 Pro (Android 16). Todo OK; logcat
+      sin crashes ni errores. **Fase 4 completa.**
 
 **Criterios de aceptación (de ROADMAP.md):** Room guarda metadatos, transcripción y resumen;
 la lista persiste entre reinicios; abrir una grabación muestra audio+transcripción+resumen;
@@ -189,3 +209,4 @@ se puede borrar (incluido su archivo).
 | 2026-06-06 | Validar modelo por **SHA-256** (no por tamaño) + descarga reanudable + cadena de mirrors | El tamaño no detecta corrupción ni archivo cambiado; Range evita reiniciar 554 MB; fallback elimina el punto único de fallo |
 | 2026-06-06 | Modelos alojados en GitHub Release `models-v1` (Gemma + Vosk); descarga sin token, `Accept-Ranges: bytes` | Origen primario propio; URLs y SHA-256 registrados en tarea 4.5.1 para cablear en 4.5.4 |
 | 2026-06-06 | Room 2.8.4 + KSP 2.3.9 | Versiones estables verificadas en Maven; KSP 2.3.9 (esquema KSP2 independiente) construido contra Kotlin 2.3.20 del proyecto |
+| 2026-06-06 | BD v1 con `fallbackToDestructiveMigration(dropAllTables=true)` y `exportSchema=false` | App aún sin publicar: si cambia el esquema, basta recrear la BD. ⚠️ Antes de publicar: exportar esquema y escribir migraciones reales para no borrar datos de usuarios |

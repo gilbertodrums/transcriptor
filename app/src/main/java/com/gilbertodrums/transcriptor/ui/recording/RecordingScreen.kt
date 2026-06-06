@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -115,7 +116,8 @@ fun RecordingScreen(vm: RecordingViewModel = viewModel()) {
                         canTranscribe = modelState is ModelState.Ready,
                         onTogglePlay = { vm.togglePlayback(recording) },
                         onTranscribe = { vm.transcribe(recording) },
-                        onSummarize = { vm.summarize(recording) }
+                        onSummarize = { vm.summarize(recording) },
+                        onDelete = { vm.deleteRecording(recording) }
                     )
                 }
             }
@@ -266,20 +268,45 @@ private fun RecordingItem(
     canTranscribe: Boolean,
     onTogglePlay: () -> Unit,
     onTranscribe: () -> Unit,
-    onSummarize: () -> Unit
+    onSummarize: () -> Unit,
+    onDelete: () -> Unit
 ) {
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text(stringResource(R.string.delete_confirm_title)) },
+            text = { Text(stringResource(R.string.delete_confirm_message)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteConfirm = false
+                    onDelete()
+                }) { Text(stringResource(R.string.delete)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
 
-            // Título + Reproducir
+            // Título + Reproducir + Borrar
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(recording.title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
                 TextButton(onClick = onTogglePlay) {
                     Text(stringResource(if (isPlaying) R.string.stop_playback else R.string.play))
+                }
+                TextButton(onClick = { showDeleteConfirm = true }) {
+                    Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error)
                 }
             }
 

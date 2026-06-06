@@ -4,6 +4,7 @@ import android.app.Application
 import android.media.MediaPlayer
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.gilbertodrums.transcriptor.data.RecordingRepository
 import com.gilbertodrums.transcriptor.data.asr.VoskModelManager
 import com.gilbertodrums.transcriptor.data.asr.VoskSpeechRecognizer
 import com.gilbertodrums.transcriptor.data.audio.AudioRecorderImpl
@@ -11,8 +12,10 @@ import com.gilbertodrums.transcriptor.data.llm.ExtractiveSummarizer
 import com.gilbertodrums.transcriptor.data.llm.MediaPipeSummarizer
 import com.gilbertodrums.transcriptor.domain.model.Recording
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.io.File
 import java.time.LocalDateTime
@@ -38,6 +41,9 @@ sealed interface LlmState {
 
 class RecordingViewModel(application: Application) : AndroidViewModel(application) {
 
+    // — Persistencia —
+    private val repository = RecordingRepository(application)
+
     // — ASR (Vosk) —
     private val audioRecorder = AudioRecorderImpl()
     private val modelManager = VoskModelManager(application)
@@ -55,8 +61,9 @@ class RecordingViewModel(application: Application) : AndroidViewModel(applicatio
     private val _isRecording = MutableStateFlow(false)
     val isRecording: StateFlow<Boolean> = _isRecording.asStateFlow()
 
-    private val _recordings = MutableStateFlow<List<Recording>>(emptyList())
-    val recordings: StateFlow<List<Recording>> = _recordings.asStateFlow()
+    // Lista persistida en Room; se actualiza sola al cambiar la BD.
+    val recordings: StateFlow<List<Recording>> = repository.recordings
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val _playingId = MutableStateFlow<String?>(null)
     val playingId: StateFlow<String?> = _playingId.asStateFlow()
@@ -181,12 +188,13 @@ class RecordingViewModel(application: Application) : AndroidViewModel(applicatio
         val file = currentFile ?: return
         currentFile = null
         val formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")
-        _recordings.value = _recordings.value + Recording(
+        val recording = Recording(
             id = UUID.randomUUID().toString(),
             title = LocalDateTime.now().format(formatter),
             createdAt = LocalDateTime.now(),
             filePath = file.absolutePath
         )
+        viewModelScope.launch { repository.save(recording) }
     }
 
     // — Reproducción —
@@ -217,8 +225,19 @@ class RecordingViewModel(application: Application) : AndroidViewModel(applicatio
         _playingId.value = null
     }
 
-    private fun updateRecording(id: String, transform: (Recording) -> Recording) {
-        _recordings.value = _recordings.value.map { if (it.id == id) transform(it) else it }
+    // — Borrado —
+
+    fun deleteRecording(recording: Recording) {
+        viewModelScope.launch {
+            if (_playingId.value == recording.id) stopPlayback()
+            runCatching { File(recording.filePath).delete() }
+            repository.delete(recording)
+        }
+    }
+
+    private suspend fun updateRecording(id: String, transform: (Recording) -> Recording) {
+        val current = repository.getById(id) ?: return
+        repository.save(transform(current))
     }
 
     override fun onCleared() {
